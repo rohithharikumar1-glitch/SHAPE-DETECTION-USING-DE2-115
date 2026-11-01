@@ -1,0 +1,59 @@
+FPGA_Nkshatra - shape detection, version 4  (any background / lighting)
+=======================================================================
+Started from FPGA_Nkshatra_v2_1.zip.  v4 contains everything of v3 (tilted box,
+shapes cut by the picture edge, right-angled / scalene triangles) plus:
+
+1. Background-independent detection  (NEW shape_bgseg.v, replaces shape_binarize)
+   Old: grey value compared with a fixed threshold + polarity -> worked for one
+   kind of background (e.g. dark object on light / light on dark) only.
+   New: every frame the background COLOUR is measured from a band along the
+   picture edge (most frequent colour, so an object touching the edge does not
+   disturb it) and also its brightness gradient (8 zones top/bottom, 6 zones
+   left/right).  A pixel is "object" when its colour differs from the local
+   background colour.  Works on black, white, grey or coloured backgrounds,
+   dark / light / coloured objects, bright or dim rooms, light that gets darker
+   to one side.  No polarity switch needed.  Needs ~2-3 frames after power-up or
+   after the light changes.
+2. Detection does not depend on the fill factor (edge directions + moment test):
+   outlines / solid shapes of any colour, far-away (small) objects, objects only
+   partly inside the picture, and squares / rectangles / triangles tilted by any
+   angle (45 deg included) are handled.  Objects as small as ~12 px work.
+3. Notification: green box = whole object visible, orange box = cut off by the
+   edge, LCD line 2 shows the shape name or NO OBJECT, LEDG[8] = object found.
+
+Switches
+--------
+SW[0] grey  SW[1] freeze (keep down)  SW[2] test pattern
+SW[3], SW[11] : not used any more
+SW[7:4] sensitivity: colour difference that counts as object = 4 + SW[7:4]/2
+        (0 = most sensitive; raise it if the background is noisy / dark and
+        you see speckle, lower it for a low-contrast object)
+SW[8] box   SW[9] black/white mask (object = what differs from background)
+SW[10] icon   SW[12] 0 = tilted box, 1 = upright box
+KEY[0] re-send camera setup   LEDG[8] object found
+
+Build
+-----
+Open top_shape_detect.qpf, compile, program output_files/top_shape_detect.sof.
+NOT DONE: Quartus compile / timing (not available here).  Please read the compile
+report; all logic runs at 25 MHz.
+
+Tests (Verilog simulation only, no Python): sim/tb_bg.v, 22 scenes, all PASS:
+  circle/square/rect/triangle/ellipse on black, white, red, green, blue, grey and
+  orange backgrounds with dark, light or coloured objects; 45 deg square (black
+  and white background); 30 / 20 / 40 deg tilts; far objects (r = 14 px, 45 deg
+  square 24 px); shapes cut by the right / top / left edge; light gradient left-
+  right and top-bottom with ~1 % speckle; empty pictures (no false object).
+  Run with sim/run_bg.sh (Icarus) or sim/run_all.do (ModelSim).
+  tb_shape / tb_icon / tb_lcd (older regression) are included.
+
+Limits
+------
+* A circle/square cut by the edge and never seen whole may show as ellipse /
+  rectangle.  Triangle with only a corner visible looks like a rectangle.
+* Hollow outlines thinner than ~4 pixels are removed as noise.
+* Object colour nearly equal to the background colour (difference < threshold)
+  cannot be seen - lower SW[7:4].
+* Heavy speckle (3 % of pixels) can still disturb the box; 1 % is fine.
+* The camera auto-exposure may change brightness when a big object enters; the
+  background is re-measured each frame, so this is followed.
